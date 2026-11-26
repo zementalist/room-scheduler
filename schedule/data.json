@@ -1,6 +1,14 @@
 {
  "version": 1,
  "rooms": [],
- "semesters": [],
+ "semesters": [
+  {
+   "id": "f13d5588-c489-4f0f-8743-02af6821ef93",
+   "name": "Test",
+   "startDate": "2025-10-01",
+   "endDate": "2026-01-15",
+   "isCurrent": false
+  }
+ ],
  "reservations": []
 }
