@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { clashes, type Slot } from '../../shared/conflict.ts';
 import { cleanName, roomKey } from '../../shared/time.ts';
-import type { Category, Kind, Reservation, Room, Semester } from '../../shared/types.ts';
+import type { Category, Kind, Reservation, Room, RoomFields, Semester } from '../../shared/types.ts';
 import type { DB } from './db.ts';
 
 export const uuid = () => crypto.randomUUID();
@@ -66,12 +66,7 @@ export function findRoomByName(db: DB, name: string): { id: string; name: string
     | undefined;
 }
 
-export interface RoomFields {
-  name: string;
-  building: string;
-  capacity: number | null;
-  type: string;
-}
+export type { RoomFields };
 
 export function insertRoom(db: DB, f: RoomFields): string {
   const id = uuid();

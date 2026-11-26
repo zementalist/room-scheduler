@@ -3,21 +3,66 @@
 Shared room and timetable booking for a university registrar. The Registrar Admin logs in to manage rooms,
 semesters and bookings; anyone with the link gets a read-only "which rooms are free?" view.
 
-- **One container** (Node 26, Fastify, SQLite) serves both the API and the web app, behind Caddy for automatic HTTPS.
-- **One database file** on a Docker volume, with a daily snapshot written inside the app.
 - **Excel in and out**: import with a dry-run preview, export that re-imports losslessly.
+- **Same rules in both editions**: a booking clashes when it is in the same room, the times overlap (back-to-back is
+  fine) and the calendar scopes intersect (weekly bookings are bounded by their semester).
+
+There are two ways to run it. They share the UI and the scheduling rules.
+
+| | **GitHub Pages edition** (default) | **Server edition** |
+|---|---|---|
+| Cost | $0, no card | A small always-on host |
+| Data | `schedule/data.json` in this repo (every save is a commit) | SQLite file |
+| Admin sign-in | A GitHub access token pasted into the app | Username and password |
+| Public view | Instant for the admin, about a minute for visitors after a save | Instant |
+| Best for | One registrar, a modest timetable, nothing to maintain | Several admins, real logins, no public repository |
 
 ```
-Browser --> Caddy (HTTPS) --> Node app (API + static web) --> SQLite file on a Docker volume
+Pages:   Browser --> static site (GitHub Pages) + schedule/data.json
+                 \-> (admin only) GitHub API --> commit to schedule/data.json --> site republished
+Server:  Browser --> Caddy (HTTPS) --> Node app (API + static web) --> SQLite file on a Docker volume
 ```
 
-## Why not GitHub Pages
+## GitHub Pages edition
 
-GitHub Pages serves static files only: no server code, no writable database, no login. Browser storage is per
-device, so data could never be shared. The app therefore needs a small always-on host; the whole stack is one
-`docker compose up`.
+Everything is built and published by `.github/workflows/pages.yml` on each push to `main`.
 
-## Run it locally (Docker only, no Node install needed)
+- **Visitors** open the site and see the read-only "which rooms are free?" view. The data is the published
+  `data.json` next to the page.
+- **The admin** clicks *Admin login* and pastes an access token. From then on every change (add a booking, import
+  a sheet, ...) is checked in the browser (clash rules) and committed to `schedule/data.json` through the GitHub
+  API, so you get a full history for free: to undo something, revert that commit. The page reloads the newest
+  committed copy before each change, and a save is refused (not overwritten) if the file changed in between.
+- **Excel import/export** runs in the browser.
+
+### Admin token
+
+1. GitHub -> Settings -> Developer settings -> Personal access tokens -> **Fine-grained tokens** -> Generate new token.
+2. *Repository access*: **Only select repositories** -> this repository. *Permissions* -> Repository permissions ->
+   **Contents: Read and write**. Nothing else. Pick an expiry (up to a year) and note it in your calendar.
+3. Paste the token into the app's login box. It is kept in that browser's local storage only; *Log out* forgets it.
+
+Anyone holding the token can change the schedule, so treat it like a password. If it leaks, delete it on GitHub
+(Settings -> Personal access tokens) and make a new one; nothing else needs to change.
+
+### Things to know
+
+- On GitHub Free, Pages needs a **public repository**: the code *and the timetable data* are publicly readable
+  (the page shows the same data anyway). Do not put anything private in the schedule.
+- A save becomes visible to visitors after the site republishes (usually under two minutes).
+- One admin at a time is the design. Two people saving at once is safe (the second is told to retry) but not smooth.
+- GitHub's rules (no commercial SaaS, soft bandwidth limits) are fine for a department timetable.
+- Moving to the server edition later is an Excel export plus an import.
+
+### Set it up on your own copy
+
+1. Push this repo to GitHub, make it public, and set *Settings -> Pages -> Source* to **GitHub Actions**.
+2. Push to `main` (or run the *Publish site* workflow). The site appears at `https://<user>.github.io/<repo>/`.
+3. Create the admin token (above), open the site, log in, and import your Excel sheet.
+
+Local preview: `VITE_BACKEND=static VITE_GH_REPO=<user>/<repo> npm run build`, then serve `web/dist`.
+
+## Server edition: run it locally (Docker only, no Node install needed)
 
 ```powershell
 copy .env.example .env      # then edit: set ADMIN_PASSWORD; for local use DOMAIN=:80 and COOKIE_SECURE=false
@@ -26,7 +71,7 @@ docker compose up -d --build
 
 Open `http://localhost` (or `http://localhost:8080` if you set `HTTP_PORT=8080`) and use **Admin login**.
 
-## Deploy for real
+## Server edition: deploy for real
 
 You need one always-on machine that can run Docker, and a host name pointing at it.
 

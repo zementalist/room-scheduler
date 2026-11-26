@@ -12,6 +12,13 @@ export interface Room {
   bookingCount: number;
 }
 
+export interface RoomFields {
+  name: string;
+  building: string;
+  capacity: number | null;
+  type: string;
+}
+
 export interface Semester {
   id: string;
   name: string;

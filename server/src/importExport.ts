@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import * as XLSX from 'xlsx';
-import { DAYS, fmtTime, pad2 } from '../../shared/time.ts';
+import { exportRows, templateRows, workbookBytes } from '../../shared/exportSheet.ts';
+import { pad2 } from '../../shared/time.ts';
 import type { AppContext } from './app.ts';
 import { HttpError, badRequest } from './errors.ts';
 import { parseWorkbook, type ParsedFile } from './excelParse.ts';
@@ -9,49 +9,14 @@ import { applyPlan, planImport, summarize, takeSnapshot, type ImportMode } from 
 import { currentSemester, getSemester, listReservations, listRooms } from './repo.ts';
 import type { DB } from './db.ts';
 
-export const EXPORT_HEADERS = ['Room', 'Building', 'Capacity', 'Type', 'Course', 'Category', 'Date', 'Start', 'End', 'Semester'];
-const COL_WIDTHS = [10, 12, 10, 16, 32, 10, 14, 8, 8, 16];
-
-function toBuffer(aoa: (string | number)[][]): Buffer {
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = COL_WIDTHS.map((wch) => ({ wch }));
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Rooms');
-  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
-}
+export { EXPORT_HEADERS } from '../../shared/exportSheet.ts';
 
 /** One row per booking, plus one row for each room that has none. Always writes Category (round-trip safe). */
 export function buildExport(db: DB): Buffer {
-  const rows: (string | number)[][] = [EXPORT_HEADERS];
-  const byRoom = new Map<string, ReturnType<typeof listReservations>>();
-  for (const r of listReservations(db)) byRoom.set(r.roomId, [...(byRoom.get(r.roomId) ?? []), r]);
-  for (const room of listRooms(db)) {
-    const base = [room.name, room.building, room.capacity ?? '', room.type];
-    const list = byRoom.get(room.id) ?? [];
-    if (!list.length) rows.push([...base, '', '', '', '', '', '']);
-    for (const x of list) {
-      rows.push([
-        ...base,
-        x.course,
-        x.cat === 'event' ? 'Event' : 'Schedule',
-        x.kind === 'date' ? (x.date as string) : DAYS[x.weekday as number]!,
-        fmtTime(x.start),
-        fmtTime(x.end),
-        x.kind === 'weekly' ? (x.semesterName ?? '') : '',
-      ]);
-    }
-  }
-  return toBuffer(rows);
+  return Buffer.from(workbookBytes(exportRows(listRooms(db), listReservations(db))));
 }
 
-export function buildTemplate(): Buffer {
-  return toBuffer([
-    EXPORT_HEADERS,
-    ['B204', 'Building B', 40, 'Lab', '', '', '', '', '', ''],
-    ['B204', 'Building B', 40, 'Lab', 'PHYS 105', 'Schedule', 'Monday', '09:00', '10:30', 'Spring 2026'],
-    ['B204', 'Building B', 40, 'Lab', 'Guest lecture', 'Event', '2026-03-12', '14:00', '16:00', ''],
-  ]);
-}
+export const buildTemplate = (): Buffer => Buffer.from(workbookBytes(templateRows()));
 
 interface PendingImport {
   parsed: ParsedFile;

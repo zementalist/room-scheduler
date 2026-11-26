@@ -1,150 +1,16 @@
-import type { ApiError, Reservation, ReservationInput, Room, Semester } from '../../shared/types.ts';
+// One import point for the UI. The backend is chosen at build time:
+//   VITE_BACKEND=static  -> GitHub Pages edition (data in the repo, rules in the browser)
+//   otherwise            -> the Node/SQLite server over /api
+import * as local from './staticApi.ts';
+import * as server from './serverApi.ts';
 
-export class ApiFail extends Error {
-  status: number;
-  code: string;
-  payload: ApiError | null;
+export { ApiFail } from '../../shared/apiError.ts';
+export type { Diagnostic, ImportPreview, RoomBody, SemesterBody, Summary } from './apiTypes.ts';
 
-  constructor(status: number, code: string, message: string, payload: ApiError | null) {
-    super(message);
-    this.status = status;
-    this.code = code;
-    this.payload = payload;
-  }
-}
+/** True in the GitHub Pages build: admin signs in with an access token instead of a password. */
+export const STATIC = import.meta.env.VITE_BACKEND === 'static';
 
-let onUnauthorized: (() => void) | null = null;
-export const setUnauthorizedHandler = (fn: () => void) => {
-  onUnauthorized = fn;
-};
-
-async function request<T>(method: string, url: string, body?: unknown, form?: FormData): Promise<T> {
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method,
-      credentials: 'same-origin',
-      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-      body: form ?? (body !== undefined ? JSON.stringify(body) : undefined),
-    });
-  } catch {
-    throw new ApiFail(0, 'network', 'Cannot reach the server. Check your connection and try again.', null);
-  }
-  const text = await res.text();
-  let data: unknown = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    /* non-JSON body */
-  }
-  if (!res.ok) {
-    const err = data as ApiError | null;
-    if (res.status === 401 && url !== '/api/login') onUnauthorized?.();
-    throw new ApiFail(res.status, err?.error ?? 'error', err?.message ?? `Request failed (${res.status}).`, err);
-  }
-  return data as T;
-}
-
-export interface Summary {
-  rooms: number;
-  schedule: number;
-  events: number;
-}
-
-export interface Diagnostic {
-  sheet: string;
-  row: number;
-  reason: string;
-}
-
-export interface ImportPreview {
-  token: string;
-  mode: 'merge' | 'replace';
-  semester: { id: string; name: string } | null;
-  sheets: number;
-  recognisedColumns: Record<string, string>;
-  ignoredColumns: string[];
-  ignoredSheets: { sheet: string; reason: string }[];
-  rooms: { new: number; updated: number };
-  reservations: { valid: number; duplicates: number; skipped: number; conflicts: number };
-  removal: { rooms: number; reservations: number };
-  skipped: Diagnostic[];
-  conflicts: Diagnostic[];
-  truncated: boolean;
-}
-
-export const api = {
-  me: () => request<{ admin: boolean; username: string | null }>('GET', '/api/me'),
-  login: (username: string, password: string) => request<{ admin: boolean }>('POST', '/api/login', { username, password }),
-  logout: () => request<{ admin: boolean }>('POST', '/api/logout'),
-  summary: () => request<Summary>('GET', '/api/summary'),
-  rooms: (q: string) => request<{ rooms: Room[] }>('GET', `/api/rooms?q=${encodeURIComponent(q)}`),
-  availability: (date: string, from: string, to: string) =>
-    request<{ rooms: Room[] }>('GET', `/api/availability?date=${date}&from=${from}&to=${to}`),
-  roomDetail: (id: string) => request<{ room: Room; reservations: Reservation[] }>('GET', `/api/rooms/${id}/reservations`),
-  semesters: () => request<{ semesters: Semester[] }>('GET', '/api/semesters'),
-
-  createRoom: (b: RoomBody) => request<Room>('POST', '/api/rooms', b),
-  updateRoom: (id: string, b: RoomBody) => request<Room>('PATCH', `/api/rooms/${id}`, b),
-  deleteRoom: (id: string) => request<{ deleted: string; bookingsDeleted: number }>('DELETE', `/api/rooms/${id}`),
-  clearRoom: (id: string) => request<{ deleted: number }>('DELETE', `/api/rooms/${id}/reservations`),
-
-  createReservation: (roomId: string, b: ReservationInput) => request<Reservation>('POST', `/api/rooms/${roomId}/reservations`, b),
-  updateReservation: (id: string, b: ReservationInput) => request<Reservation>('PATCH', `/api/reservations/${id}`, b),
-  deleteReservation: (id: string) => request<{ deleted: number }>('DELETE', `/api/reservations/${id}`),
-
-  createSemester: (b: SemesterBody) => request<Semester>('POST', '/api/semesters', b),
-  updateSemester: (id: string, b: SemesterBody) => request<Semester>('PATCH', `/api/semesters/${id}`, b),
-  deleteSemester: (id: string, withBookings: boolean) =>
-    request<{ bookingsDeleted: number }>('DELETE', `/api/semesters/${id}${withBookings ? '?withBookings=true' : ''}`),
-  rollover: (b: SemesterBody & { clearSchedule: boolean }) =>
-    request<{ semester: Semester; scheduleCleared: number }>('POST', '/api/semesters/rollover', b),
-
-  clearAll: () => request<{ rooms: number; reservations: number }>('DELETE', '/api/data'),
-
-  importPreview: (file: File, mode: 'merge' | 'replace', semesterId: string) => {
-    const f = new FormData();
-    f.append('mode', mode); // fields must precede the file part
-    f.append('semesterId', semesterId);
-    f.append('file', file);
-    return request<ImportPreview>('POST', '/api/import/preview', undefined, f);
-  },
-  importConfirm: (token: string) => request<ImportPreview & { applied: boolean }>('POST', '/api/import/confirm', { token }),
-};
-
-export interface RoomBody {
-  name: string;
-  building: string;
-  capacity: number | string | null;
-  type: string;
-}
-
-export interface SemesterBody {
-  name: string;
-  startDate: string;
-  endDate: string;
-  isCurrent?: boolean;
-}
-
-/** Download a file (sent with the session cookie) and surface API errors instead of saving them. */
-export async function download(url: string, fallbackName: string): Promise<void> {
-  const res = await fetch(url, { credentials: 'same-origin' });
-  if (!res.ok) {
-    if (res.status === 401) onUnauthorized?.();
-    let message = `Download failed (${res.status}).`;
-    try {
-      message = ((await res.json()) as ApiError).message;
-    } catch {
-      /* keep default */
-    }
-    throw new ApiFail(res.status, 'download', message, null);
-  }
-  const m = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(await res.blob());
-  a.download = m?.[1] ?? fallbackName;
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
-}
+const impl = STATIC ? local : server;
+export const api = impl.api;
+export const download = impl.download;
+export const setUnauthorizedHandler = impl.setUnauthorizedHandler;

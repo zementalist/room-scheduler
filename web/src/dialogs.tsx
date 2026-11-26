@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { isValidDate } from '../../shared/time.ts';
 import type { Room, Semester } from '../../shared/types.ts';
-import { api, ApiFail, download, type ImportPreview } from './api.ts';
+import { api, ApiFail, download, STATIC, type ImportPreview } from './api.ts';
 import { Modal, useConfirm, useToast } from './ui.tsx';
 
 const errText = (e: unknown, fallback: string) => (e instanceof ApiFail ? e.message : fallback);
@@ -32,12 +32,18 @@ export function LoginDialog({ onClose, onSuccess }: { onClose: () => void; onSuc
     <Modal title="Admin login" onClose={onClose}>
       <form onSubmit={submit}>
         <div className="modal-body">
-          <label htmlFor="lu">Username</label>
-          <input id="lu" value={username} autoComplete="username" onChange={(e) => setUsername(e.target.value)} />
+          {STATIC ? (
+            <p className="sub">Paste the admin access token for this schedule. It is kept in this browser only; log out to forget it.</p>
+          ) : (
+            <>
+              <label htmlFor="lu">Username</label>
+              <input id="lu" value={username} autoComplete="username" onChange={(e) => setUsername(e.target.value)} />
+            </>
+          )}
           <label htmlFor="lp" style={{ marginTop: 8 }}>
-            Password
+            {STATIC ? 'Access token' : 'Password'}
           </label>
-          <input id="lp" type="password" value={password} autoComplete="current-password" onChange={(e) => setPassword(e.target.value)} autoFocus />
+          <input id="lp" type="password" value={password} autoComplete={STATIC ? 'off' : 'current-password'} onChange={(e) => setPassword(e.target.value)} autoFocus />
           <div className="err" role="alert">
             {error}
           </div>
