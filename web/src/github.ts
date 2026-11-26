@@ -8,7 +8,8 @@ import { normalizeData, serialize, type Data } from '../../shared/engine.ts';
 export const REPO: string = import.meta.env.VITE_GH_REPO ?? '';
 const BRANCH: string = import.meta.env.VITE_GH_BRANCH || 'main';
 const PATH = 'schedule/data.json';
-const API = 'https://api.github.com';
+/** Overridable only so the build can be tested against a local stand-in for the GitHub API. */
+const API: string = import.meta.env.VITE_GH_API || 'https://api.github.com';
 
 const NETWORK = 'Cannot reach GitHub. Check your connection and try again.';
 
