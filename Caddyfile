@@ -1,0 +1,11 @@
+# DOMAIN=rooms.example.edu  -> automatic HTTPS (Let's Encrypt)
+# DOMAIN=:80                -> plain HTTP (local testing / behind another proxy)
+{$DOMAIN:localhost} {
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy same-origin
+		X-Frame-Options DENY
+	}
+	reverse_proxy app:3000
+}

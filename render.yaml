@@ -1,0 +1,26 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# The SQLite database lives on the persistent disk at /data. Persistent disks require a paid plan;
+# on a free web service the database would be wiped on every restart and redeploy.
+services:
+  - type: web
+    name: room-scheduler
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: scheduler-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        sync: false # prompted for in the dashboard; never stored in git
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: DATA_DIR
+        value: /data
+      - key: BACKUP_KEEP
+        value: "14"
