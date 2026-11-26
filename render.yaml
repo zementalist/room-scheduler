@@ -1,26 +1,31 @@
-# Render Blueprint: https://render.com/docs/blueprint-spec
-# The SQLite database lives on the persistent disk at /data. Persistent disks require a paid plan;
-# on a free web service the database would be wiped on every restart and redeploy.
+# Render Blueprint: free web service. The container disk is ephemeral on Render's free plan, so the
+# database is continuously replicated to Backblaze B2 (Litestream) and restored on every start.
 services:
   - type: web
     name: room-scheduler
     runtime: docker
-    plan: starter
+    plan: free
     region: frankfurt
     healthCheckPath: /api/health
     autoDeploy: true
-    disk:
-      name: scheduler-data
-      mountPath: /data
-      sizeGB: 1
     envVars:
       - key: ADMIN_USERNAME
         value: admin
       - key: ADMIN_PASSWORD
-        sync: false # prompted for in the dashboard; never stored in git
+        sync: false
       - key: COOKIE_SECURE
         value: "true"
       - key: DATA_DIR
         value: /data
       - key: BACKUP_KEEP
         value: "14"
+      - key: LITESTREAM_BUCKET
+        sync: false
+      - key: LITESTREAM_ENDPOINT
+        sync: false
+      - key: LITESTREAM_REGION
+        sync: false
+      - key: LITESTREAM_ACCESS_KEY_ID
+        sync: false
+      - key: LITESTREAM_SECRET_ACCESS_KEY
+        sync: false

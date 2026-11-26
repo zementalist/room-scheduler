@@ -1,0 +1,18 @@
+# Continuous replication of the SQLite database to S3-compatible storage (Backblaze B2 free tier).
+# Values come from environment variables; see docker-entrypoint.sh and README.md.
+access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
+
+snapshot:
+  interval: 6h
+  retention: 168h
+
+dbs:
+  - path: ${DATA_DIR}/scheduler.db
+    replica:
+      type: s3
+      bucket: ${LITESTREAM_BUCKET}
+      path: scheduler
+      endpoint: ${LITESTREAM_ENDPOINT}
+      region: ${LITESTREAM_REGION}
+      force-path-style: true

@@ -66,6 +66,22 @@ docker compose run --rm --no-deps -v "$(pwd)/backups-copy:/restore" app sh -c "c
 docker compose start app
 ```
 
+## Free hosting on Render (no disk) with Litestream
+
+Render's free web service has an ephemeral disk and sleeps after 15 idle minutes. To keep the data anyway, the image runs
+[Litestream](https://litestream.io): on every start it restores `scheduler.db` from an S3-compatible bucket when the local file is
+missing, and while running it streams each change to the bucket (about once a second, flushed on shutdown). It is switched on
+only when `LITESTREAM_BUCKET` is set. If the bucket is unreachable at start, the app refuses to start rather than run unprotected.
+
+1. Create a free [Backblaze B2](https://www.backblaze.com/cloud-storage) account (10 GB free, no card), a **private** bucket, and an
+   application key restricted to that bucket. Note the bucket's endpoint (`s3.<region>.backblazeb2.com`) and region.
+2. Render -> New -> Blueprint -> pick this repo (`render.yaml`). Fill in the prompted variables: `ADMIN_PASSWORD`,
+   `LITESTREAM_BUCKET`, `LITESTREAM_ENDPOINT`, `LITESTREAM_REGION`, `LITESTREAM_ACCESS_KEY_ID` (B2 keyID), `LITESTREAM_SECRET_ACCESS_KEY` (B2 applicationKey).
+3. Open the `.onrender.com` link. The first visit after a sleep takes about a minute while the container starts and restores.
+   A free uptime pinger (for example UptimeRobot, every 5 minutes on `/api/health`) avoids most sleeps.
+
+Run exactly one instance: two instances replicating to one bucket would corrupt the replica.
+
 ## Moving the data from the old HTML tool
 
 1. Open the old `Room Reservations (1).html`, click **Export to Excel**.

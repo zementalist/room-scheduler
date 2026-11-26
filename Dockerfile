@@ -16,6 +16,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-fund --no-audit
 
+# ---- litestream (static binary, multi-arch) ----
+FROM litestream/litestream:0.5.18 AS litestream
+
 # ---- runtime ----
 FROM node:26-slim AS runtime
 ENV NODE_ENV=production \
@@ -28,6 +31,8 @@ COPY package.json ./
 COPY shared ./shared
 COPY server ./server
 COPY --from=build /app/web/dist ./web/dist
+COPY --from=litestream /usr/local/bin/litestream /usr/local/bin/litestream
+COPY litestream.yml /etc/litestream.yml
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh && mkdir -p /data && chown -R node:node /data
 # Starts as root only to fix ownership of the mounted data directory, then runs the app as "node".
